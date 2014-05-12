@@ -18,16 +18,37 @@
 
 NAME=shairport
 DAEMON="/usr/local/bin/shairport.pl"
-PIDFILE=/var/run/$NAME.pid
+PIDDIR=/run/$NAME
+PIDFILE=$PIDDIR/$NAME.pid
 DAEMON_ARGS="-w $PIDFILE"
 
 [ -x $binary ] || exit 0
 
-RETVAL=0
+# Run as `shairport' if USER is not specified
+if [ -z $USER ]; then
+        USER=shairport
+fi
+
+# If no group is specified, use USER
+if [ -z $GROUP ]; then
+        GROUP=$USER
+fi
+
+# Check if user exists
+if ( ! id -u ${USER} 1>/dev/null ); then
+    echo "Create user ${USER} and group ${GROUP} with audio permissions"
+    exit 2;
+fi
 
 start() {
     echo -n "Starting shairport: "
+    if [ ! -d $PIDDIR ]; then
+        mkdir $PIDDIR || return 2
+    fi
+    chown $USER:$GROUP $PIDDIR || return 2
+
     start-stop-daemon --start --quiet --pidfile "$PIDFILE" \
+                      --chuid $USER:$GROUP \
                       --exec "$DAEMON" -b --oknodo -- $DAEMON_ARGS
     log_end_msg $?
 }
@@ -35,6 +56,7 @@ start() {
 stop() {
     echo -n "Shutting down shairport: "
     start-stop-daemon --stop --quiet --pidfile "$PIDFILE" \
+                --chuid $USER:$GROUP \
                 --retry 1 --oknodo
     log_end_msg $?
 }
